@@ -12,9 +12,9 @@
 -----------------
 --  Libraries  --
 -----------------
-library IEEE;
-use IEEE.std_logic_1164.all;
-use IEEE.Numeric_std.all;
+library ieee;
+use ieee.std_logic_1164.all;
+use ieee.numeric_std.all;
 
 --------------
 --  Entity  --
@@ -41,6 +41,21 @@ architecture behavioral of keypad_display_ut is
   ----------------
   -- Components --
   ----------------
+
+  component i2c_7sd_driver is
+  generic
+  (
+    C_CLK_FREQ_MHZ : integer := 50                      -- System clock frequency in MHz
+  );
+  port
+  (
+    I_CLK          : in std_logic;                      -- System clk frequency of (C_CLK_FREQ_MHZ)
+    I_RESET_N      : in std_logic;                      -- System reset (active low)
+    I_DISPLAY_DATA : in std_logic_vector(15 downto 0);  -- Data to be displayed
+    IO_I2C_SDA     : inout std_logic;                   -- Serial data of i2c bus
+    IO_I2C_SCL     : inout std_logic                    -- Serial clock of i2c bus
+  );
+  end component i2c_7sd_driver;
 
   component keypad_5x4_wrapper is
   generic
@@ -75,12 +90,25 @@ architecture behavioral of keypad_display_ut is
 
   signal s_keypad_data    : std_logic_vector(4 downto 0);   -- Data from keypress
   signal s_keypressed     : std_logic;                      -- Whether a key was pressed
-  signal s_command_nibble : std_logic_vector(3 downto 0);   -- Command flag to be displayed
-  signal s_data_nibble    : std_logic_vector(3 downto 0);   -- Data to be displayed
   signal s_display_data   : std_logic_vector(15 downto 0);  -- Data to be displayed on I2C 7SD
-  signal s_display_enable : std_logic;                      -- Display's enable control
 
 begin
+
+  -- Device driver for 7SD
+  DISPLAY_DRIVER_INST: i2c_7sd_driver
+  generic map
+  (
+    C_CLK_FREQ_MHZ   => C_CLK_FREQ_MHZ
+  )
+  port map
+  (
+    I_CLK            => I_CLK,
+    I_RESET_N        => I_RESET_N,
+
+    I_DISPLAY_DATA   => s_display_data,
+    IO_I2C_SDA       => IO_I2C_SDA,
+    IO_I2C_SCL       => IO_I2C_SCL
+  );
 
   -- Device driver for keypad
   KEYPAD_DRIVER_INST: keypad_5x4_wrapper
@@ -106,35 +134,26 @@ begin
   -- Process Name     : KEYPAD_DISPLAY_TEST
   -- Sensitivity List : I_CLK            : System clock
   --                    I_RESET_N        : System reset (active low logic)
-  -- Useful Outputs   : s_command_nibble : hex digit to be displayed on hex1
-  --                    s_data_nibble    : hex digit to be displayed on hex0
-  --                    s_display_enable : Digit enable for display
+  -- Useful Outputs   :
   -- Description      : A process to latch triggered inputs from a matrix
-  --                    keypad to two seven segment displays.
+  --                    keypad
   ------------------------------------------------------------------------------
   KEYPAD_DISPLAY_TEST: process (I_CLK, I_RESET_N)
   begin
     if (I_RESET_N = '0') then
-      s_command_nibble      <= (others=>'0');
-      s_data_nibble         <= (others=>'0');
-      s_display_enable      <= '0';
+      s_display_data        <= (others=>'1');
 
     elsif (rising_edge(I_CLK)) then
-      -- Enable (turn on) the display
-      s_display_enable      <= '1';
-
       -- Only update key data when a key is pressed
       if (s_keypressed = '1') then
-        s_command_nibble(0) <= s_keypad_data(4);
-        s_data_nibble       <= s_keypad_data(3 downto 0);
+        s_display_data <= s_keypad_data(3 downto 0) &
+                          s_keypad_data(3 downto 0) &
+                          s_keypad_data(3 downto 0) &
+                          s_keypad_data(3 downto 0);
       else
-        s_command_nibble    <= s_command_nibble;
-        s_data_nibble       <= s_data_nibble;
+        s_display_data <= s_display_data;
       end if;
     end if;
   end process KEYPAD_DISPLAY_TEST;
   ------------------------------------------------------------------------------
-
-  s_display_data <= s_command_nibble &
-
 end architecture behavioral;
