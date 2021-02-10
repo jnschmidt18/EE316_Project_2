@@ -146,22 +146,23 @@ begin
     if (I_RESET_N = '0') then
       s_display_data        <= (others=>'1');
 
-      elsif (rising_edge(I_CLK)) then
-        if (s_7sd_busy = '1') then
-          s_display_data <= x"0000";
-        else
-          s_display_data <= x"DEAD";
-        end if ;
+    elsif (rising_edge(I_CLK)) then
+        -- if (s_7sd_busy = '1') then
+        --   s_display_data <= x"0000";
+        -- else
+        --   s_display_data <= x"DEAD";
+        -- end if ;
 
-      -- -- Only update key data when a key is pressed
-      -- if (s_keypressed = '1') then
-      --   s_display_data <= s_keypad_data(3 downto 0) &
-      --                     s_keypad_data(3 downto 0) &
-      --                     s_keypad_data(3 downto 0) &
-      --                     s_keypad_data(3 downto 0);
-      -- else
-      --   s_display_data <= s_display_data;
-      -- end if;
+        -- Only update key data when a key is pressed
+      if (s_keypressed = '1' and s_7sd_busy = '0') then
+          -- s_display_data <= x"DEAD";
+        s_display_data <= s_keypad_data(3 downto 0) &
+                          s_keypad_data(3 downto 0) &
+                          s_keypad_data(3 downto 0) &
+                          s_keypad_data(3 downto 0);
+      else
+        s_display_data <= s_display_data;
+      end if;
     end if;
   end process KEYPAD_DISPLAY_TEST;
   ------------------------------------------------------------------------------

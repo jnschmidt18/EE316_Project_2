@@ -71,10 +71,11 @@ architecture behavioral of i2c_7sd_driver is
   ---------------
   -- Constants --
   ---------------
-  constant C_CLK_FREQ_HZ         : integer := 50_000_000; -- C_CLK_FREQ_MHZ * 1_000_000;
-  constant C_I2C_BUS_CLK_FREQ_HZ : integer := 400_000;  -- CDL=> 100_000 or 400_000?
+  constant C_CLK_FREQ_HZ         : integer := C_CLK_FREQ_MHZ * 1_000_000;
+  constant C_I2C_BUS_CLK_FREQ_HZ : integer := 100_000;  -- CDL=> 100_000 or 400_000?
   constant C_I2C_7SD_ADDR        : std_logic_vector(6 downto 0) := "1110001";  -- 0x71
-  constant C_WR_BYTE_INDEX_MAX   : integer := 12; -- CDL=>?
+  constant C_WR_BYTE_INDEX_MAX   : integer := 12;
+  constant C_WR_BYTE_READY_INDEX : integer := 7;
 
   constant C_7SD_CLEAR_DISP_CMD  : std_logic_vector(7 downto 0) := x"76"; -- CDL=> Explain and add more?
   constant C_7SD_BRIGHTNESS_CMD  : std_logic_vector(7 downto 0) := x"7A";
@@ -89,7 +90,6 @@ architecture behavioral of i2c_7sd_driver is
   type T_7SD_STATE is (READY_STATE, WRITE_STATE, WAIT_STATE, NEXT_STATE);
   signal s_7sd_curr_state       : T_7SD_STATE := READY_STATE;
 
-  signal s_display_data_prev    : std_logic_vector(15 downto 0);
   signal s_display_data_latched : std_logic_vector(15 downto 0);
   signal s_7sd_enable           : std_logic;
   signal s_wr_data_byte_index   : integer;
@@ -139,26 +139,26 @@ begin
   I2C_STATE_MACHINE: process (I_CLK, I_RESET_N)
   begin
     if (I_RESET_N = '0') then
-      s_7sd_curr_state <= READY_STATE;
+      s_7sd_curr_state             <= READY_STATE;
 
     elsif (rising_edge(I_CLK)) then
         -- I2C 7SD state machine logic
         case s_7sd_curr_state is
           when READY_STATE =>
-            if (s_display_data_prev /= I_DISPLAY_DATA) then
-              s_7sd_curr_state <= WRITE_STATE;
+            if (s_display_data_latched /= I_DISPLAY_DATA) then
+              s_7sd_curr_state     <= WRITE_STATE;
             else
-              s_7sd_curr_state <= s_7sd_curr_state;
+              s_7sd_curr_state     <= s_7sd_curr_state;
             end if;
 
           when WRITE_STATE =>
-            s_7sd_curr_state <= WAIT_STATE;
+            s_7sd_curr_state       <= WAIT_STATE;
 
           when WAIT_STATE =>
             if (s_7sd_busy = '1') then
-              s_7sd_curr_state <= NEXT_STATE;
+              s_7sd_curr_state     <= NEXT_STATE;
             else
-              s_7sd_curr_state <= s_7sd_curr_state;
+              s_7sd_curr_state     <= s_7sd_curr_state;
             end if;
 
             when NEXT_STATE =>
@@ -169,12 +169,12 @@ begin
                   s_7sd_curr_state <= READY_STATE;
                 end if;
               else
-                s_7sd_curr_state <= s_7sd_curr_state;
+                s_7sd_curr_state   <= s_7sd_curr_state;
               end if;
 
           -- Error condition, should never occur
           when others =>
-            s_7sd_curr_state <= READY_STATE;
+            s_7sd_curr_state       <= READY_STATE;
         end case;
     end if;
   end process I2C_STATE_MACHINE;
@@ -184,8 +184,7 @@ begin
   -- Process Name     : DATA_FLOW_CTRL
   -- Sensitivity List : I_CLK                  : System clock
   --                    I_RESET_N              : System reset (active low logic)
-  -- Useful Outputs   : s_display_data_prev    : Previous input data.
-  --                    s_display_data_latched : Latched data to remain stable.
+  -- Useful Outputs   : s_display_data_latched : Latched data to remain stable.
   --                    s_7sd_enable           : Enable signal for I2C master.
   --                    s_wr_data_byte_index   : Current data byte index.
   --                    O_BUSY                 : Output busy signal.
@@ -197,19 +196,14 @@ begin
   DATA_FLOW_CTRL: process (I_CLK, I_RESET_N)
   begin
     if (I_RESET_N = '0') then
-      s_display_data_prev        <= (others=>'0');
       s_display_data_latched     <= (others=>'0');
       s_7sd_enable               <= '0';
       s_wr_data_byte_index       <=  0;
       O_BUSY                     <= '1';
 
     elsif (rising_edge(I_CLK)) then
-      -- Store previous display data
-      s_display_data_prev        <= I_DISPLAY_DATA;
-
       -- Latch data so it does not change during write
-      if (s_7sd_curr_state = READY_STATE) and
-         (s_display_data_prev /= I_DISPLAY_DATA) then
+      if (s_7sd_curr_state = READY_STATE) then
          s_display_data_latched  <= I_DISPLAY_DATA;
       else
          s_display_data_latched  <= s_display_data_latched;
@@ -230,7 +224,7 @@ begin
           if (s_wr_data_byte_index /= C_WR_BYTE_INDEX_MAX) then
             s_wr_data_byte_index <= s_wr_data_byte_index + 1;
           else
-            s_wr_data_byte_index <= 7; -- CDL=> Add constant
+            s_wr_data_byte_index <= C_WR_BYTE_READY_INDEX;
           end if;
       else
         s_wr_data_byte_index     <= s_wr_data_byte_index;
