@@ -52,6 +52,7 @@ architecture behavioral of keypad_display_ut is
     I_CLK          : in std_logic;                      -- System clk frequency of (C_CLK_FREQ_MHZ)
     I_RESET_N      : in std_logic;                      -- System reset (active low)
     I_DISPLAY_DATA : in std_logic_vector(15 downto 0);  -- Data to be displayed
+    O_BUSY         : out std_logic;                     -- Busy signal from I2C master
     IO_I2C_SDA     : inout std_logic;                   -- Serial data of i2c bus
     IO_I2C_SCL     : inout std_logic                    -- Serial clock of i2c bus
   );
@@ -91,6 +92,7 @@ architecture behavioral of keypad_display_ut is
   signal s_keypad_data    : std_logic_vector(4 downto 0);   -- Data from keypress
   signal s_keypressed     : std_logic;                      -- Whether a key was pressed
   signal s_display_data   : std_logic_vector(15 downto 0);  -- Data to be displayed on I2C 7SD
+  signal s_7sd_busy       : std_logic;                      -- Busy signal from I2C 7SD
 
 begin
 
@@ -106,6 +108,7 @@ begin
     I_RESET_N        => I_RESET_N,
 
     I_DISPLAY_DATA   => s_display_data,
+    O_BUSY           => s_7sd_busy,
     IO_I2C_SDA       => IO_I2C_SDA,
     IO_I2C_SCL       => IO_I2C_SCL
   );
@@ -143,16 +146,22 @@ begin
     if (I_RESET_N = '0') then
       s_display_data        <= (others=>'1');
 
-    elsif (rising_edge(I_CLK)) then
-      -- Only update key data when a key is pressed
-      if (s_keypressed = '1') then
-        s_display_data <= s_keypad_data(3 downto 0) &
-                          s_keypad_data(3 downto 0) &
-                          s_keypad_data(3 downto 0) &
-                          s_keypad_data(3 downto 0);
-      else
-        s_display_data <= s_display_data;
-      end if;
+      elsif (rising_edge(I_CLK)) then
+        if (s_7sd_busy = '1') then
+          s_display_data <= x"0000";
+        else
+          s_display_data <= x"DEAD";
+        end if ;
+
+      -- -- Only update key data when a key is pressed
+      -- if (s_keypressed = '1') then
+      --   s_display_data <= s_keypad_data(3 downto 0) &
+      --                     s_keypad_data(3 downto 0) &
+      --                     s_keypad_data(3 downto 0) &
+      --                     s_keypad_data(3 downto 0);
+      -- else
+      --   s_display_data <= s_display_data;
+      -- end if;
     end if;
   end process KEYPAD_DISPLAY_TEST;
   ------------------------------------------------------------------------------
