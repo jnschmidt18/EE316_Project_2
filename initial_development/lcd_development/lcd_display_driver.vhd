@@ -37,7 +37,7 @@ library work;
 entity lcd_display_driver is
 generic
 (
-  C_CLK_FREQ_MHZ   : integer := 50       -- System clock frequency in MHz
+  C_CLK_FREQ_MHZ   : integer := 50;      -- System clock frequency in MHz
 
   -- LCD Specific Settings
   C_NUM_DISP_LINES : std_logic := '1';   -- Number of lines to display (1-line mode: '0', 2-line mode: '1')
@@ -103,7 +103,7 @@ architecture rtl of lcd_display_driver is
   ---------------
   -- Constants --
   ---------------
-  constant C_LCD_INDEX_CNTR_MAX : integer := 31;
+  constant C_LCD_INDEX_CNTR_MAX : integer := 32;
 
   -------------
   -- SIGNALS --
@@ -149,10 +149,10 @@ begin
     clk            => I_CLK,
     reset_n        => I_RESET_N,
     lcd_enable     => s_lcd_enable,
-    lcd_bus        => s_lcd_rw & s_lcd_rs & s_lcd_write_byte,
+    lcd_bus        => s_lcd_rs & s_lcd_rw & s_lcd_write_byte,
     busy           => s_lcd_busy,
-    rw             => O_LCD_RW_RD_HIGH_WR_LOW,
-    rs             => O_LCD_RS_DATA_HIGH_CTRL_LOW,
+    rw             => O_LCD_RW,
+    rs             => O_LCD_RS,
     e              => O_LCD_ENABLE,
     lcd_data       => O_LCD_DATA
   );
@@ -273,7 +273,7 @@ begin
 
       -- Data or Address selection logic
       if (s_lcd_curr_state = NEXT_STATE) and (s_lcd_busy = '0') then
-        if ((s_lcd_index_cntr = 15) and (s_lcd_write_mode = '0')) then
+        if ((s_lcd_index_cntr = 16) and (s_lcd_write_mode = '0')) then
           s_lcd_write_mode <= '1';
         else
           s_lcd_write_mode <= '0';
@@ -284,7 +284,7 @@ begin
 
       -- Data Byte Index logic
       if (s_lcd_curr_state = NEXT_STATE) and (s_lcd_busy = '0') then
-        if ((s_lcd_index_cntr = 15) and (s_lcd_write_mode = '0')) then  -- Add constant
+        if ((s_lcd_index_cntr = 16) and (s_lcd_write_mode = '0')) then  -- Add constant
           s_lcd_index_cntr <= s_lcd_index_cntr;
         elsif (s_lcd_index_cntr /= C_LCD_INDEX_CNTR_MAX) then
           s_lcd_index_cntr <= s_lcd_index_cntr + 1;
@@ -297,13 +297,15 @@ begin
 
       -- Data byte logic
       if (s_lcd_write_mode = '0') then  -- Data
-        s_lcd_write_byte   <= s_lcd_data_latched(s_lcd_index_cntr);
+        s_lcd_write_byte   <= s_lcd_data_latched(C_LCD_INDEX_CNTR_MAX - s_lcd_index_cntr);  -- CDL=> needed?
         s_lcd_rs           <= '1';
       else  -- Address
-        s_lcd_write_byte   <= 1 & "1000000";  -- Address 40 (start of line 2) -- CDL=> Address correct?  -- CDL=> Add constant
+        s_lcd_write_byte   <= "1" & "1000000";  -- Address 40 (start of line 2) -- CDL=> Address correct?  -- CDL=> Add constant
         s_lcd_rs           <= '0';
       end if;
-
+		--s_lcd_write_byte <= x"42";
+		--s_lcd_rs         <= '1';
+		
       -- Output Busy logic
       if (s_lcd_curr_state = READY_STATE) then
         O_LCD_BUSY         <= '0';
